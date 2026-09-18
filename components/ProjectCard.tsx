@@ -21,3 +21,5 @@ export default function ProjectCard({title, description, technologies, link}: Pr
         </article>
     )
 }
+
+
