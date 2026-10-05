@@ -8,13 +8,13 @@ export async function GET(
 ) {
     
     const resolvedParams = await context.params;
-    const id = Number(resolvedParams.id);
+    const id = resolvedParams.id;
     
-    if (Number.isNaN(id)) {
+    if (!id) {
         return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
     
-    const project = await getProjectById(id);
+    const project = await getProjectById(String(id));
     if (!project) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

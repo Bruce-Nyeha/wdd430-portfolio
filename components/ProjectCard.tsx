@@ -4,7 +4,7 @@ import React from 'react';
 import { deleteProject } from '@/app/lib/actions'; 
 
 interface ProjectCardProps {
-    id: number; 
+    id: string; 
     title: string;
     description: string;
     technologies: string[];
@@ -45,7 +45,7 @@ export default function ProjectCard({ id, title, description, technologies, link
                 </Link>
 
                 {/* Delete Button Form */}
-                <form action={deleteProject.bind(null, id)} className="inline">
+                <form action={deleteProject.bind(null, String(id))} className="inline">
                     <button
                         type="submit"
                         onClick={(e) => {

@@ -3,7 +3,7 @@ import React from 'react';
 import ProjectCard from './ProjectCard';
 
 interface Project {
-    id: number;
+    id: string;
     title: string;
     description: string;
     technologies: string[];

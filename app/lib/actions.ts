@@ -1,67 +1,95 @@
+// app/lib/actions.ts
 'use server';
-import { string, z } from 'zod';
-import { neon } from '@neondatabase/serverless';
+
+import { auth } from '@/auth';
+import { sql } from '@vercel/postgres'; 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { title } from 'process';
+import { signIn } from '@/auth'; 
+import { AuthError } from 'next-auth';
 
-// connect to my database
-const sql = neon(process.env.DATABASE_URL!);
-
-// Schema Validation: Protects my database against sql injections
-
-const ProjectFormSchema = z.object({
-    title: z.string().min(2),
-    description: z.string().min(10),
-    technologies: z.string().min(2)
-});
-
-export async function createProject(formdata: FormData){
-    const raw = {
-        title: formdata.get('title'),
-        description: formdata.get('description'),
-        technologies: formdata.get('technologies'),
-    };
-
-    const parsed = ProjectFormSchema.safeParse(raw);
-    if (!parsed.success){
-        throw new Error('Invalid project input.');
-    }
-
-    const {title, description, technologies} = parsed.data;
-
-    await sql `INSERT INTO projects (title, description, technologies)
-    VALUES (${title}, ${description}, ${technologies})`;
-
-    revalidatePath('/projects');
-    redirect('/projects');
+/**
+ * Security Guard Helper: Validates a live owner session before database interaction
+ */
+async function requireOwnerSession() {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error('Not authenticated');
+  }
+  return session;
 }
 
-//Update an existing project record by Id
- 
-export async function updateProject(id: number, formdata: FormData){
-    const raw = {
-        title: formdata.get('title'),
-        description: formdata.get('description'),
-        technologies: formdata.get('technologies')
-    };
-    const parsed = ProjectFormSchema.safeParse(raw);
-    if (!parsed.success){
-        throw new Error('Invalid project patch details')
-    }
+/**
+ * Create a Brand New Project Record
+ */
+export async function createProject(formData: FormData) {
+  await requireOwnerSession();
 
-    const {title, description, technologies} = parsed.data;
+  // Extract clean string primitive variables out of the untyped FormData object matrix
+  const title = (formData.get('title') || '') as string;
+  const description = (formData.get('description') || '') as string;
+  const imageUrl = (formData.get('imageUrl') || '') as string;
 
-    await sql `UPDATE projects 
-    SET title = ${title}, description = ${description}, technologies = ${technologies}
-    WHERE id = ${id}`;
+  // Execute parameter injection query securely using your active database driver [1.11]
+  await sql`
+    INSERT INTO projects (title, description, imageUrl) 
+    VALUES (${title}, ${description}, ${imageUrl})
+  `;
 
-    revalidatePath('/projects');
-    redirect('/projects');
+  revalidatePath('/dashboard/projects');
+  redirect('/dashboard/projects');
 }
 
-export async function deleteProject(id: number){
-    await sql`DELETE FROM projects WHERE id = ${id}`;
+/**
+ * Update an Existing Project Record
+ */
+export async function updateProject(id: string, formData: FormData) {
+  await requireOwnerSession();
 
-    revalidatePath('/projects');
+  const title = (formData.get('title') || '') as string;
+  const description = (formData.get('description') || '') as string;
+  const imageUrl = (formData.get('imageUrl') || '') as string;
+
+
+  await sql`
+    UPDATE projects 
+    SET title = ${title}, description = ${description}, imageUrl = ${imageUrl} 
+    WHERE id = ${id}
+  `;
+
+  revalidatePath('/dashboard/projects');
+  redirect('/dashboard/projects');
+}
+
+
+export async function deleteProject(id: string) {
+  await requireOwnerSession();
+
+  // Execute database record row removal query [1.11]
+  await sql`
+    DELETE FROM projects 
+    WHERE id = ${id}
+  `;
+
+  revalidatePath('/dashboard/projects');
+}
+
+export async function authenticate(
+  prevState: string | undefined, 
+  formData: FormData,
+) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid business email or system password configuration.';
+        default:
+          return 'Something went wrong. Access clearance denied.';
+      }
+    }
+
+    throw error;
+  }
 }
